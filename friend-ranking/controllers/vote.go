@@ -54,10 +54,15 @@ func (v VoteController) AddVote(c *gin.Context) {
 			ReturnError(c, 4004, "更新mysql中选手分数失败")
 			return
 		}
-		// 更新redis，避免缓存不一致问题
+		// 延迟双删，避免redis缓存不一致问题，再通过获取排行榜来缓存重建
 		var redisKey string
 		redisKey = "ranking:" + strconv.Itoa(player.Aid)
-		cache.Rdb.ZIncrBy(redisKey, 1, playerIdStr)
+		// cache.Rdb.ZIncrBy(redisKey, 1, playerIdStr)
+		cache.Rdb.Del(redisKey)
+		go func() { // 第二次删除，采用goroutine避免阻塞主线程
+			time.Sleep(500 * time.Millisecond)
+			cache.Rdb.Del(redisKey)
+		}()
 
 		ReturnSuccess(c, 0, "投票成功", res, 1)
 		return
